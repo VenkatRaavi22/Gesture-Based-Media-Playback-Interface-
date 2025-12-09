@@ -1,0 +1,145 @@
+import cv2
+import mediapipe as mp
+import pyautogui
+import time
+
+# Function to count fingers
+def count_fingers(hand_landmarks):
+    cnt = 0
+    # Threshold based on wrist to middle finger
+    thresh = (hand_landmarks.landmark[0].y - hand_landmarks.landmark[9].y) / 2
+
+    # Thumb
+    if (hand_landmarks.landmark[5].x - hand_landmarks.landmark[4].x) > 0.05:
+        cnt += 1
+    # Index
+    if (hand_landmarks.landmark[5].y - hand_landmarks.landmark[8].y) > thresh:
+        cnt += 1
+    # Middle
+    if (hand_landmarks.landmark[9].y - hand_landmarks.landmark[12].y) > thresh:
+        cnt += 1
+    # Ring
+    if (hand_landmarks.landmark[13].y - hand_landmarks.landmark[16].y) > thresh:
+        cnt += 1
+    # Pinky
+    if (hand_landmarks.landmark[17].y - hand_landmarks.landmark[20].y) > thresh:
+        cnt += 1
+
+    return cnt
+
+# Initialize camera
+cap = cv2.VideoCapture(0)
+
+# Initialize MediaPipe Hands
+mp_drawing = mp.solutions.drawing_utils
+mp_hands = mp.solutions.hands
+hands = mp_hands.Hands(max_num_hands=1, min_detection_confidence=0.7, min_tracking_confidence=0.7)
+
+prev_count = -1
+start_init = False
+start_time = 0
+DELAY = 1  # 1-second delay before registering gesture
+
+# -----------------------------------------
+# NEW FEATURES: Gesture Action Strings + Cooldown
+# -----------------------------------------
+last_action = ""
+last_action_time = 0
+ACTION_COOLDOWN = 2   # seconds
+# -----------------------------------------
+
+while True:
+    ret, frame = cap.read()
+    if not ret:
+        continue
+
+    frame = cv2.flip(frame, 1)
+    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    results = hands.process(rgb_frame)
+
+    if results.multi_hand_landmarks:
+        hand_landmarks = results.multi_hand_landmarks[0]
+        finger_count = count_fingers(hand_landmarks)
+
+        current_time = time.time()
+        # Start counting delay timer
+        if finger_count != prev_count:
+            if not start_init:
+                start_time = current_time
+                start_init = True
+            elif (current_time - start_time) > DELAY:
+                # Trigger key based on finger count
+                action = ""   # NEW: store action text
+
+                if finger_count == 1:
+                    pyautogui.press("right")
+                    action = "Next (â†’)"
+
+                elif finger_count == 2:
+                    pyautogui.press("left")
+                    action = "Previous (â†)"
+
+                elif finger_count == 3:
+                    pyautogui.press("up")
+                    action = "Volume Up"
+
+                elif finger_count == 4:
+                    pyautogui.press("down")
+                    action = "Volume Down"
+
+                elif finger_count == 5:
+                    pyautogui.press("space")
+                    action = "Play / Pause"
+
+                # -----------------------------------------
+                # NEW EXTRA FEATURES: Volume Mute (0 fingers)
+                # -----------------------------------------
+                elif finger_count == 0:
+                    if time.time() - last_action_time > ACTION_COOLDOWN:
+                        pyautogui.press("volumemute")
+                        action = "Mute / Unmute"
+                        last_action_time = time.time()
+                # -----------------------------------------
+
+                prev_count = finger_count
+                start_init = False
+
+                # Store last action for display
+                if action != "":
+                    last_action = action
+                    last_action_time = time.time()
+
+        else:
+            start_init = False  # Reset timer if same gesture
+
+        # Draw landmarks
+        mp_drawing.draw_landmarks(frame, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+
+        # Display finger count
+        cv2.putText(frame, f"Fingers: {finger_count}", (10, 50),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+
+        # Display countdown if waiting
+        if start_init:
+            wait_time = max(0, round(DELAY - (current_time - start_time), 1))
+            cv2.putText(frame, f"Hold for: {wait_time}s", (10, 100),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+
+    # -----------------------------------------
+    # NEW: Display Last Action for 2 seconds
+    # -----------------------------------------
+    if time.time() - last_action_time < 2:
+        cv2.putText(frame, f"Action: {last_action}", (10, 150),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 2)
+    # -----------------------------------------
+
+    # Show frame
+    cv2.imshow("Hand Gesture Controller", frame)
+
+    # Exit on ESC
+    if cv2.waitKey(1) & 0xFF == 27:
+        break
+
+# Release resources
+cap.release()
+cv2.destroyAllWindows()
