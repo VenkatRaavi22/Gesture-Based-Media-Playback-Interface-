@@ -1,1 +1,9 @@
 A novel approach to human- computer interaction through a gesture-controlled media player utilizing OpenCV for video processing and MediaPipe for hand gesture recognition, our system enabling users to control media playback with intuitive hand gestures through video feed from a webcam, processes it in real-time, and interprets specific gestures to perform media control actions such as play, pause, volume adjustment, and track navigation.
+
+Technologies:
+
+Libraries / Frameworks: OpenCV, Mediapipe, 
+
+PyAutoGUI, Numpy
+
+Development Tools: VS Code / PyCharm editor, pip for package management
